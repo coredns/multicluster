@@ -2,6 +2,7 @@ package multicluster
 
 import (
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
+	"strings"
 
 	"github.com/miekg/dns"
 )
@@ -13,6 +14,7 @@ type recordRequest struct {
 	// The protocol is usually _udp or _tcp (if set), and comes from the protocol part of a well formed
 	// SRV record.
 	protocol string
+	cluster  string
 	endpoint string
 	// The servicename used in Kubernetes.
 	service string
@@ -28,7 +30,7 @@ type recordRequest struct {
 func parseRequest(name, zone string) (r recordRequest, err error) {
 	// 3 Possible cases:
 	// 1. _port._protocol.service.namespace.pod|svc.zone
-	// 2. (endpoint): endpoint.service.namespace.pod|svc.zone
+	// 2. (endpoint): endpoint.clusterid.service.namespace.pod|svc.zone
 	// 3. (service): service.namespace.pod|svc.zone
 
 	base, _ := dnsutil.TrimZone(name, zone)
@@ -40,14 +42,10 @@ func parseRequest(name, zone string) (r recordRequest, err error) {
 
 	r.port = "*"
 	r.protocol = "*"
-	// for r.name, r.namespace and r.endpoint, we need to know if they have been set or not...
-	// For endpoint: if empty we should skip the endpoint check in k.get(). Hence we cannot set if to "*".
-	// For name: myns.svc.cluster.local != *.myns.svc.cluster.local
-	// For namespace: svc.cluster.local != *.svc.cluster.local
 
 	// start at the right and fill out recordRequest with the bits we find, so we look for
 	// pod|svc.namespace.service and then either
-	// * endpoint
+	// * endpoint.cluster
 	// *_protocol._port
 
 	last := len(segs) - 1
@@ -75,18 +73,21 @@ func parseRequest(name, zone string) (r recordRequest, err error) {
 		return r, nil
 	}
 
-	// Because of ambiguity we check the labels left: 1: an endpoint. 2: port and protocol.
+	// Because of ambiguity we check the labels left: 1: endpoint and cluster. 2: port and protocol.
 	// Anything else is a query that is too long to answer and can safely be delegated to return an nxdomain.
-	switch last {
 
-	case 0: // endpoint only
-		r.endpoint = segs[last]
-	case 1: // service and port
-		r.protocol = stripUnderscore(segs[last])
-		r.port = stripUnderscore(segs[last-1])
-
-	default: // too long
+	if last != 1 { // there must be exactly two labels remaining
 		return r, errInvalidRequest
+	}
+
+	// TODO it doesn't support port and protocol wildcards
+	// TODO unable to distinguish between endpoint+cluster vs protocol+port queries
+	if strings.HasPrefix(segs[last], "_") { // if label starts with underscore, it must be port and protocol
+		r.port = stripUnderscore(segs[last-1])
+		r.protocol = stripUnderscore(segs[last])
+	} else {
+		r.endpoint = stripUnderscore(segs[last-1])
+		r.cluster = stripUnderscore(segs[last])
 	}
 
 	return r, nil
@@ -106,6 +107,7 @@ func (r recordRequest) String() string {
 	s := r.port
 	s += "." + r.protocol
 	s += "." + r.endpoint
+	s += "." + r.cluster
 	s += "." + r.service
 	s += "." + r.namespace
 	s += "." + r.podOrSvc

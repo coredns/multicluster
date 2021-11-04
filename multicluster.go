@@ -5,13 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"github.com/coredns/coredns/plugin/etcd/msg"
-	"github.com/vanekjar/coredns-multicluster/object"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/fall"
 	"github.com/coredns/coredns/request"
+	"github.com/vanekjar/coredns-multicluster/object"
+	model "github.com/vanekjar/coredns-multicluster/object"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	apiv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 	"sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 	"strings"
 	"time"
@@ -50,6 +52,7 @@ type MultiCluster struct {
 	Fall         fall.F
 	controller   controller
 	ttl          uint32
+	opts         controllerOpts
 }
 
 func New(zones []string) *MultiCluster {
@@ -75,7 +78,7 @@ func (m *MultiCluster) InitController(ctx context.Context) (onStart func() error
 
 	mcsClient, err := v1alpha1.NewForConfig(config)
 
-	m.controller = newController(ctx, kubeClient, mcsClient)
+	m.controller = newController(ctx, kubeClient, mcsClient, m.opts)
 
 	onStart = func() error {
 		go func() {
@@ -314,13 +317,19 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 		}
 	}
 
-	var serviceList []*object.ServiceImport
+	var (
+		endpointsListFunc func() []*object.Endpoints
+		endpointsList     []*object.Endpoints
+		serviceList       []*model.ServiceImport
+	)
 
 	if wildcard(r.service) || wildcard(r.namespace) {
 		serviceList = m.controller.ServiceList()
+		endpointsListFunc = func() []*object.Endpoints { return m.controller.EndpointsList() }
 	} else {
 		idx := object.ServiceKey(r.service, r.namespace)
 		serviceList = m.controller.SvcIndex(idx)
+		endpointsListFunc = func() []*object.Endpoints { return m.controller.EpIndex(idx) }
 	}
 
 	zonePath := msg.Path(zone, coredns)
@@ -332,6 +341,43 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 		// If request namespace is a wildcard, filter results against Corefile namespace list.
 		// (Namespaces without a wildcard were filtered before the call to this function.)
 		if wildcard(r.namespace) && !m.namespaceExists(svc.Namespace) {
+			continue
+		}
+
+		// Headless service or endpoint query
+		if svc.Type == apiv1alpha1.Headless || r.endpoint != "" {
+			if endpointsList == nil {
+				endpointsList = endpointsListFunc()
+			}
+
+			for _, ep := range endpointsList {
+				if object.EndpointsKey(svc.Name, svc.Namespace) != ep.Index {
+					continue
+				}
+
+				for _, eps := range ep.Subsets {
+					for _, addr := range eps.Addresses {
+
+						if r.endpoint != "" {
+							if !match(r.cluster, ep.ClusterId) || !match(r.endpoint, endpointHostname(addr)) {
+								continue
+							}
+						}
+
+						for _, p := range eps.Ports {
+							if !(match(r.port, p.Name) && match(r.protocol, string(p.Protocol))) {
+								continue
+							}
+							s := msg.Service{Host: addr.IP, Port: int(p.Port), TTL: m.ttl}
+							s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name, endpointHostname(addr) + "." + ep.ClusterId}, "/")
+
+							err = nil
+
+							services = append(services, s)
+						}
+					}
+				}
+			}
 			continue
 		}
 
@@ -349,10 +395,21 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 				services = append(services, s)
 			}
 		}
-
-		// TODO handle headless ServiceImport
 	}
 	return services, err
+}
+
+func endpointHostname(addr object.EndpointAddress) string {
+	if addr.Hostname != "" {
+		return addr.Hostname
+	}
+	if strings.Contains(addr.IP, ".") {
+		return strings.Replace(addr.IP, ".", "-", -1)
+	}
+	if strings.Contains(addr.IP, ":") {
+		return strings.Replace(addr.IP, ":", "-", -1)
+	}
+	return ""
 }
 
 // match checks if a and b are equal taking wildcards into account.

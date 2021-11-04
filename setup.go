@@ -43,8 +43,13 @@ func setup(c *caddy.Controller) error {
 
 // ParseStanza parses a kubernetes stanza
 func ParseStanza(c *caddy.Controller) (*MultiCluster, error) {
+	opts := controllerOpts{
+		initEndpointsCache: true, // watch endpoints by default
+	}
+
 	zones := plugin.OriginsFromArgsOrServerBlock(c.RemainingArgs(), c.ServerBlockKeys)
 	multiCluster := New(zones)
+	multiCluster.opts = opts
 
 	for c.NextBlock() {
 		switch c.Val() {
@@ -64,6 +69,11 @@ func ParseStanza(c *caddy.Controller) (*MultiCluster, error) {
 			multiCluster.ClientConfig = config
 		case "fallthrough":
 			multiCluster.Fall.SetZonesFromArgs(c.RemainingArgs())
+		case "noendpoints":
+			if len(c.RemainingArgs()) != 0 {
+				return nil, c.ArgErr()
+			}
+			multiCluster.opts.initEndpointsCache = false
 		default:
 			return nil, c.Errf("unknown property '%s'", c.Val())
 		}
