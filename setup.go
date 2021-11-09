@@ -14,8 +14,6 @@ const pluginName = "multicluster"
 func init() { plugin.Register(pluginName, setup) }
 
 func setup(c *caddy.Controller) error {
-	c.Next() // Skip "multicluster" label
-
 	multiCluster, err := ParseStanza(c)
 	if err != nil {
 		return plugin.Error(pluginName, err)
@@ -43,6 +41,8 @@ func setup(c *caddy.Controller) error {
 
 // ParseStanza parses a kubernetes stanza
 func ParseStanza(c *caddy.Controller) (*MultiCluster, error) {
+	c.Next() // Skip "multicluster" label
+
 	opts := controllerOpts{
 		initEndpointsCache: true, // watch endpoints by default
 	}

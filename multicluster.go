@@ -369,7 +369,7 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 								continue
 							}
 							s := msg.Service{Host: addr.IP, Port: int(p.Port), TTL: m.ttl}
-							s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name, endpointHostname(addr) + "." + ep.ClusterId}, "/")
+							s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name, ep.ClusterId, endpointHostname(addr)}, "/")
 
 							err = nil
 
