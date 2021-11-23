@@ -49,11 +49,23 @@ add it just below `kubernetes` plugin that has very similar functionality:
 ```
 ...
 kubernetes:kubernetes
-multicluster:github.com/vanekjar/coredns-multicluster
+multicluster:github.com/hyandell/coredns-multicluster
 ...
 ```
 
 Follow the [coredns README](https://github.com/coredns/coredns#readme) file to build it.
+
+#### Build coredns docker
+
+Build the coredns binary
+```
+make build
+```
+
+Build the docker image with the coredns binary
+```
+make docker-build
+```
 
 ### Modify cluster's corefile
 
