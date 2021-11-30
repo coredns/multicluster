@@ -1,4 +1,4 @@
-# corends-multicluster
+# multicluster
 
 ## Name
 
