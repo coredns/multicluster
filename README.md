@@ -49,7 +49,7 @@ add it just below `kubernetes` plugin that has very similar functionality:
 ```
 ...
 kubernetes:kubernetes
-multicluster:github.com/hyandell/coredns-multicluster
+multicluster:github.com/coredns/multicluster
 ...
 ```
 
