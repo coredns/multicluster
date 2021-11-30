@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	k8s "github.com/coredns/coredns/plugin/kubernetes/object"
-	"github.com/hyandell/coredns-multicluster/object"
+	"github.com/coredns/multicluster/object"
 	api "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	discoveryV1beta1 "k8s.io/api/discovery/v1beta1"
