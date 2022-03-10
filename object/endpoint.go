@@ -61,7 +61,7 @@ func EndpointSliceToEndpoints(obj meta.Object) (meta.Object, error) {
 	}
 	e := &Endpoints{
 		Version:   ends.GetResourceVersion(),
-		ClusterId: ends.Labels[LabelClusterId],
+		ClusterId: ends.Annotations[LabelClusterId],
 		Name:      ends.GetName(),
 		Namespace: ends.GetNamespace(),
 		Index:     EndpointsKey(ends.Labels[mcs.LabelServiceName], ends.GetNamespace()),
