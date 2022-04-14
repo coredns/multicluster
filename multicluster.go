@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/coredns/coredns/plugin/etcd/msg"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/fall"
@@ -15,8 +18,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	apiv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 	"sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
-	"strings"
-	"time"
 
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
@@ -121,23 +122,24 @@ func (m MultiCluster) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns
 	state.Zone = zone
 
 	var (
-		records []dns.RR
-		extra   []dns.RR
-		err     error
+		records   []dns.RR
+		extra     []dns.RR
+		truncated bool
+		err       error
 	)
 
 	switch state.QType() {
 	case dns.TypeA:
-		records, err = plugin.A(ctx, &m, zone, state, nil, plugin.Options{})
+		records, truncated, err = plugin.A(ctx, &m, zone, state, nil, plugin.Options{})
 	case dns.TypeAAAA:
-		records, err = plugin.AAAA(ctx, &m, zone, state, nil, plugin.Options{})
+		records, truncated, err = plugin.AAAA(ctx, &m, zone, state, nil, plugin.Options{})
 	case dns.TypeTXT:
-		records, err = plugin.TXT(ctx, &m, zone, state, nil, plugin.Options{})
+		records, truncated, err = plugin.TXT(ctx, &m, zone, state, nil, plugin.Options{})
 	case dns.TypeSRV:
-		records, extra, err = plugin.SRV(ctx, &m, zone, state, plugin.Options{})
+		records, truncated, extra, err = plugin.SRV(ctx, &m, zone, state, plugin.Options{})
 	case dns.TypeNS:
 		if state.Name() == zone {
-			records, extra, err = plugin.NS(ctx, &m, zone, state, plugin.Options{})
+			records, truncated, extra, err = plugin.NS(ctx, &m, zone, state, plugin.Options{})
 			break
 		}
 		fallthrough
@@ -145,7 +147,7 @@ func (m MultiCluster) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns
 		// Do a fake A lookup, so we can distinguish between NODATA and NXDOMAIN
 		fake := state.NewWithQuestion(state.QName(), dns.TypeA)
 		fake.Zone = state.Zone
-		_, err = plugin.A(ctx, &m, zone, fake, nil, plugin.Options{})
+		_, _, err = plugin.A(ctx, &m, zone, fake, nil, plugin.Options{})
 	}
 
 	if m.IsNameError(err) {
@@ -168,6 +170,7 @@ func (m MultiCluster) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns
 
 	message := new(dns.Msg)
 	message.SetReply(r)
+	message.Truncated = truncated
 	message.Authoritative = true
 	message.Answer = append(message.Answer, records...)
 	message.Extra = append(message.Extra, extra...)
