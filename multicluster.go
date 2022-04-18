@@ -136,10 +136,10 @@ func (m MultiCluster) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns
 	case dns.TypeTXT:
 		records, truncated, err = plugin.TXT(ctx, &m, zone, state, nil, plugin.Options{})
 	case dns.TypeSRV:
-		records, truncated, extra, err = plugin.SRV(ctx, &m, zone, state, plugin.Options{})
+		records, extra, err = plugin.SRV(ctx, &m, zone, state, plugin.Options{})
 	case dns.TypeNS:
 		if state.Name() == zone {
-			records, truncated, extra, err = plugin.NS(ctx, &m, zone, state, plugin.Options{})
+			records, extra, err = plugin.NS(ctx, &m, zone, state, plugin.Options{})
 			break
 		}
 		fallthrough
