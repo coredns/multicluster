@@ -31,7 +31,7 @@ func TestParseStanza(t *testing.T) {
 			fall.Zero,
 		},
 		{
-			`kubernetes coredns.local clusterset.local {
+			`multicluster coredns.local clusterset.local {
     fallthrough
 }`,
 			false,
