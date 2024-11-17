@@ -1,8 +1,9 @@
 package multicluster
 
 import (
-	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"strings"
+
+	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 
 	"github.com/miekg/dns"
 )

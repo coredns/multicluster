@@ -2,21 +2,22 @@ package object
 
 import (
 	"fmt"
+
 	"github.com/coredns/coredns/plugin/kubernetes/object"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	v1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
+	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 )
 
 // ServiceImport is a stripped down api.ServiceImport with only the items we need for CoreDNS.
 type ServiceImport struct {
-	Version      string
-	Name         string
-	Namespace    string
-	Index        string
-	ClusterIPs   []string
-	Type         v1alpha1.ServiceImportType
-	Ports        []v1alpha1.ServicePort
+	Version    string
+	Name       string
+	Namespace  string
+	Index      string
+	ClusterIPs []string
+	Type       mcs.ServiceImportType
+	Ports      []mcs.ServicePort
 
 	*object.Empty
 }
@@ -26,17 +27,17 @@ func ServiceKey(name, namespace string) string { return name + "." + namespace }
 
 // ToServiceImport converts an v1alpha1.ServiceImport to a *ServiceImport.
 func ToServiceImport(obj meta.Object) (meta.Object, error) {
-	svc, ok := obj.(*v1alpha1.ServiceImport)
+	svc, ok := obj.(*mcs.ServiceImport)
 
 	if !ok {
 		return nil, fmt.Errorf("unexpected object %v", obj)
 	}
 	s := &ServiceImport{
-		Version:      svc.GetResourceVersion(),
-		Name:         svc.GetName(),
-		Namespace:    svc.GetNamespace(),
-		Index:        ServiceKey(svc.GetName(), svc.GetNamespace()),
-		Type:         svc.Spec.Type,
+		Version:   svc.GetResourceVersion(),
+		Name:      svc.GetName(),
+		Namespace: svc.GetNamespace(),
+		Index:     ServiceKey(svc.GetName(), svc.GetNamespace()),
+		Type:      svc.Spec.Type,
 	}
 
 	if len(svc.Spec.IPs) > 0 {
@@ -45,7 +46,7 @@ func ToServiceImport(obj meta.Object) (meta.Object, error) {
 	}
 
 	if len(svc.Spec.Ports) > 0 {
-		s.Ports = make([]v1alpha1.ServicePort, len(svc.Spec.Ports))
+		s.Ports = make([]mcs.ServicePort, len(svc.Spec.Ports))
 		copy(s.Ports, svc.Spec.Ports)
 	}
 
@@ -57,13 +58,13 @@ var _ runtime.Object = &ServiceImport{}
 // DeepCopyObject implements the ObjectKind interface.
 func (s *ServiceImport) DeepCopyObject() runtime.Object {
 	s1 := &ServiceImport{
-		Version:      s.Version,
-		Name:         s.Name,
-		Namespace:    s.Namespace,
-		Index:        s.Index,
-		Type:         s.Type,
-		ClusterIPs:   make([]string, len(s.ClusterIPs)),
-		Ports:        make([]v1alpha1.ServicePort, len(s.Ports)),
+		Version:    s.Version,
+		Name:       s.Name,
+		Namespace:  s.Namespace,
+		Index:      s.Index,
+		Type:       s.Type,
+		ClusterIPs: make([]string, len(s.ClusterIPs)),
+		Ports:      make([]mcs.ServicePort, len(s.Ports)),
 	}
 	copy(s1.ClusterIPs, s.ClusterIPs)
 	copy(s1.Ports, s.Ports)

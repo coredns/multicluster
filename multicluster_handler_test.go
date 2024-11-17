@@ -3,12 +3,14 @@ package multicluster
 import (
 	"context"
 	"fmt"
+	"testing"
+
+	k8sObject "github.com/coredns/coredns/plugin/kubernetes/object"
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/coredns/multicluster/object"
 	"github.com/miekg/dns"
-	"sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-	"testing"
+	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 )
 
 var dnsTestCases = []test.Case{
@@ -37,34 +39,34 @@ var dnsTestCases = []test.Case{
 	},
 	{
 		Qname: "svc1.testns.svc.cluster.local.", Qtype: dns.TypeSRV,
-		Rcode: dns.RcodeSuccess,
+		Rcode:  dns.RcodeSuccess,
 		Answer: []dns.RR{test.SRV("svc1.testns.svc.cluster.local.	5	IN	SRV	0 100 80 svc1.testns.svc.cluster.local.")},
-		Extra: []dns.RR{test.A("svc1.testns.svc.cluster.local.  5       IN      A       10.0.0.1")},
+		Extra:  []dns.RR{test.A("svc1.testns.svc.cluster.local.  5       IN      A       10.0.0.1")},
 	},
 	{
 		Qname: "svcempty.testns.svc.cluster.local.", Qtype: dns.TypeSRV,
-		Rcode: dns.RcodeSuccess,
+		Rcode:  dns.RcodeSuccess,
 		Answer: []dns.RR{test.SRV("svcempty.testns.svc.cluster.local.	5	IN	SRV	0 100 80 svcempty.testns.svc.cluster.local.")},
-		Extra: []dns.RR{test.A("svcempty.testns.svc.cluster.local.  5       IN      A       10.0.0.1")},
+		Extra:  []dns.RR{test.A("svcempty.testns.svc.cluster.local.  5       IN      A       10.0.0.1")},
 	},
 	{
 		Qname: "svc6.testns.svc.cluster.local.", Qtype: dns.TypeSRV,
-		Rcode: dns.RcodeSuccess,
+		Rcode:  dns.RcodeSuccess,
 		Answer: []dns.RR{test.SRV("svc6.testns.svc.cluster.local.	5	IN	SRV	0 100 80 svc6.testns.svc.cluster.local.")},
-		Extra: []dns.RR{test.AAAA("svc6.testns.svc.cluster.local.  5       IN      AAAA       1234:abcd::1")},
+		Extra:  []dns.RR{test.AAAA("svc6.testns.svc.cluster.local.  5       IN      AAAA       1234:abcd::1")},
 	},
 	// SRV Service (wildcard)
 	{
 		Qname: "svc1.*.svc.cluster.local.", Qtype: dns.TypeSRV,
-		Rcode: dns.RcodeSuccess,
+		Rcode:  dns.RcodeSuccess,
 		Answer: []dns.RR{test.SRV("svc1.*.svc.cluster.local.	5	IN	SRV	0 100 80 svc1.testns.svc.cluster.local.")},
-		Extra: []dns.RR{test.A("svc1.testns.svc.cluster.local.  5       IN      A       10.0.0.1")},
+		Extra:  []dns.RR{test.A("svc1.testns.svc.cluster.local.  5       IN      A       10.0.0.1")},
 	},
 	{
 		Qname: "svcempty.*.svc.cluster.local.", Qtype: dns.TypeSRV,
-		Rcode: dns.RcodeSuccess,
+		Rcode:  dns.RcodeSuccess,
 		Answer: []dns.RR{test.SRV("svcempty.*.svc.cluster.local.	5	IN	SRV	0 100 80 svcempty.testns.svc.cluster.local.")},
-		Extra: []dns.RR{test.A("svcempty.testns.svc.cluster.local.  5       IN      A       10.0.0.1")},
+		Extra:  []dns.RR{test.A("svcempty.testns.svc.cluster.local.  5       IN      A       10.0.0.1")},
 	},
 	// SRV Service Not udp/tcp
 	{
@@ -188,7 +190,7 @@ var dnsTestCases = []test.Case{
 	// AAAA
 	{
 		Qname: "5678-abcd--2.clusterid.hdls1.testns.svc.cluster.local", Qtype: dns.TypeAAAA,
-		Rcode: dns.RcodeSuccess,
+		Rcode:  dns.RcodeSuccess,
 		Answer: []dns.RR{test.AAAA("5678-abcd--2.clusterid.hdls1.testns.svc.cluster.local.	5	IN	AAAA	5678:abcd::2")},
 	},
 	// AAAA Service (with an existing A record, but no AAAA record)
@@ -322,7 +324,7 @@ var dnsTestCases = []test.Case{
 	},
 	{
 		Qname: "svc-dual-stack.testns.svc.cluster.local.", Qtype: dns.TypeSRV,
-		Rcode: dns.RcodeSuccess,
+		Rcode:  dns.RcodeSuccess,
 		Answer: []dns.RR{test.SRV("svc-dual-stack.testns.svc.cluster.local.	5	IN	SRV	0 50 80 svc-dual-stack.testns.svc.cluster.local.")},
 		Extra: []dns.RR{
 			test.A("svc-dual-stack.testns.svc.cluster.local.  5       IN      A       10.0.0.3"),
@@ -339,7 +341,6 @@ var dnsTestCases = []test.Case{
 }
 
 func TestServeDNS(t *testing.T) {
-
 	m := New([]string{"cluster.local."})
 	m.controller = &controllerMock2{}
 	m.Next = test.NextHandler(dns.RcodeSuccess, nil)
@@ -438,7 +439,6 @@ var notSyncedTestCases = []test.Case{
 }
 
 func TestNotSyncedServeDNS(t *testing.T) {
-
 	m := New([]string{"cluster.local."})
 	m.controller = &controllerMock2{
 		notSynced: true,
@@ -489,9 +489,9 @@ var svcIndex = map[string][]*object.ServiceImport{
 		{
 			Name:       "kubedns",
 			Namespace:  "kube-system",
-			Type:       v1alpha1.ClusterSetIP,
+			Type:       mcs.ClusterSetIP,
 			ClusterIPs: []string{"10.0.0.10"},
-			Ports: []v1alpha1.ServicePort{
+			Ports: []mcs.ServicePort{
 				{Name: "dns", Protocol: "udp", Port: 53},
 			},
 		},
@@ -500,9 +500,9 @@ var svcIndex = map[string][]*object.ServiceImport{
 		{
 			Name:       "svc1",
 			Namespace:  "testns",
-			Type:       v1alpha1.ClusterSetIP,
+			Type:       mcs.ClusterSetIP,
 			ClusterIPs: []string{"10.0.0.1"},
-			Ports: []v1alpha1.ServicePort{
+			Ports: []mcs.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
 		},
@@ -511,9 +511,9 @@ var svcIndex = map[string][]*object.ServiceImport{
 		{
 			Name:       "svcempty",
 			Namespace:  "testns",
-			Type:       v1alpha1.ClusterSetIP,
+			Type:       mcs.ClusterSetIP,
 			ClusterIPs: []string{"10.0.0.1"},
-			Ports: []v1alpha1.ServicePort{
+			Ports: []mcs.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
 		},
@@ -522,9 +522,9 @@ var svcIndex = map[string][]*object.ServiceImport{
 		{
 			Name:       "svc6",
 			Namespace:  "testns",
-			Type:       v1alpha1.ClusterSetIP,
+			Type:       mcs.ClusterSetIP,
 			ClusterIPs: []string{"1234:abcd::1"},
-			Ports: []v1alpha1.ServicePort{
+			Ports: []mcs.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
 		},
@@ -533,22 +533,22 @@ var svcIndex = map[string][]*object.ServiceImport{
 		{
 			Name:      "hdls1",
 			Namespace: "testns",
-			Type:      v1alpha1.Headless,
+			Type:      mcs.Headless,
 		},
 	},
 	"hdlsprtls.testns": {
 		{
 			Name:      "hdlsprtls",
 			Namespace: "testns",
-			Type:      v1alpha1.Headless,
+			Type:      mcs.Headless,
 		},
 	},
 	"svc-dual-stack.testns": {
 		{
 			Name:       "svc-dual-stack",
 			Namespace:  "testns",
-			Type:       v1alpha1.ClusterSetIP,
-			ClusterIPs: []string{"10.0.0.3", "10::3"}, Ports: []v1alpha1.ServicePort{
+			Type:       mcs.ClusterSetIP,
+			ClusterIPs: []string{"10.0.0.3", "10::3"}, Ports: []mcs.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
 		},
@@ -567,85 +567,95 @@ func (controllerMock2) ServiceList() []*object.ServiceImport {
 
 var epsIndex = map[string][]*object.Endpoints{
 	"kubedns.kube-system": {{
-		Subsets: []object.EndpointSubset{
-			{
-				Addresses: []object.EndpointAddress{
-					{IP: "172.0.0.100"},
-				},
-				Ports: []object.EndpointPort{
-					{Port: 53, Protocol: "udp", Name: "dns"},
+		Endpoints: k8sObject.Endpoints{
+			Subsets: []k8sObject.EndpointSubset{
+				{
+					Addresses: []k8sObject.EndpointAddress{
+						{IP: "172.0.0.100"},
+					},
+					Ports: []k8sObject.EndpointPort{
+						{Port: 53, Protocol: "udp", Name: "dns"},
+					},
 				},
 			},
+			Name:      "kubedns",
+			Namespace: "kube-system",
+			Index:     object.EndpointsKey("kubedns", "kube-system"),
 		},
 		ClusterId: "clusterid",
-		Name:      "kubedns",
-		Namespace: "kube-system",
-		Index:     object.EndpointsKey("kubedns", "kube-system"),
 	}},
 	"svc1.testns": {{
-		Subsets: []object.EndpointSubset{
-			{
-				Addresses: []object.EndpointAddress{
-					{IP: "172.0.0.1", Hostname: "ep1a"},
-				},
-				Ports: []object.EndpointPort{
-					{Port: 80, Protocol: "tcp", Name: "http"},
+		Endpoints: k8sObject.Endpoints{
+			Subsets: []k8sObject.EndpointSubset{
+				{
+					Addresses: []k8sObject.EndpointAddress{
+						{IP: "172.0.0.1", Hostname: "ep1a"},
+					},
+					Ports: []k8sObject.EndpointPort{
+						{Port: 80, Protocol: "tcp", Name: "http"},
+					},
 				},
 			},
+			Name:      "svc1-slice1",
+			Namespace: "testns",
+			Index:     object.EndpointsKey("svc1", "testns"),
 		},
 		ClusterId: "clusterid",
-		Name:      "svc1-slice1",
-		Namespace: "testns",
-		Index:     object.EndpointsKey("svc1", "testns"),
 	}},
 	"svcempty.testns": {{
-		Subsets: []object.EndpointSubset{
-			{
-				Addresses: nil,
-				Ports: []object.EndpointPort{
-					{Port: 80, Protocol: "tcp", Name: "http"},
+		Endpoints: k8sObject.Endpoints{
+			Subsets: []k8sObject.EndpointSubset{
+				{
+					Addresses: nil,
+					Ports: []k8sObject.EndpointPort{
+						{Port: 80, Protocol: "tcp", Name: "http"},
+					},
 				},
 			},
+			Name:      "svcempty-slice1",
+			Namespace: "testns",
+			Index:     object.EndpointsKey("svcempty", "testns"),
 		},
 		ClusterId: "clusterid",
-		Name:      "svcempty-slice1",
-		Namespace: "testns",
-		Index:     object.EndpointsKey("svcempty", "testns"),
 	}},
 	"hdls1.testns": {{
-		Subsets: []object.EndpointSubset{
-			{
-				Addresses: []object.EndpointAddress{
-					{IP: "172.0.0.2"},
-					{IP: "172.0.0.3"},
-					{IP: "172.0.0.4", Hostname: "dup-name"},
-					{IP: "172.0.0.5", Hostname: "dup-name"},
-					{IP: "5678:abcd::1"},
-					{IP: "5678:abcd::2"},
-				},
-				Ports: []object.EndpointPort{
-					{Port: 80, Protocol: "tcp", Name: "http"},
+		Endpoints: k8sObject.Endpoints{
+			Subsets: []k8sObject.EndpointSubset{
+				{
+					Addresses: []k8sObject.EndpointAddress{
+						{IP: "172.0.0.2"},
+						{IP: "172.0.0.3"},
+						{IP: "172.0.0.4", Hostname: "dup-name"},
+						{IP: "172.0.0.5", Hostname: "dup-name"},
+						{IP: "5678:abcd::1"},
+						{IP: "5678:abcd::2"},
+					},
+					Ports: []k8sObject.EndpointPort{
+						{Port: 80, Protocol: "tcp", Name: "http"},
+					},
 				},
 			},
+			Name:      "hdls1-slice1",
+			Namespace: "testns",
+			Index:     object.EndpointsKey("hdls1", "testns"),
 		},
 		ClusterId: "clusterid",
-		Name:      "hdls1-slice1",
-		Namespace: "testns",
-		Index:     object.EndpointsKey("hdls1", "testns"),
 	}},
 	"hdlsprtls.testns": {{
-		Subsets: []object.EndpointSubset{
-			{
-				Addresses: []object.EndpointAddress{
-					{IP: "172.0.0.20"},
+		Endpoints: k8sObject.Endpoints{
+			Subsets: []k8sObject.EndpointSubset{
+				{
+					Addresses: []k8sObject.EndpointAddress{
+						{IP: "172.0.0.20"},
+					},
+					Ports: []k8sObject.EndpointPort{{Port: -1}},
 				},
-				Ports: []object.EndpointPort{{Port: -1}},
 			},
+			Name:      "hdlsprtls-slice1",
+			Namespace: "testns",
+			Index:     object.EndpointsKey("hdlsprtls", "testns"),
 		},
 		ClusterId: "clusterid",
-		Name:      "hdlsprtls-slice1",
-		Namespace: "testns",
-		Index:     object.EndpointsKey("hdlsprtls", "testns"),
 	}},
 }
 
@@ -661,14 +671,14 @@ func (controllerMock2) EndpointsList() []*object.Endpoints {
 	return eps
 }
 
-func (controllerMock2) GetNamespaceByName(name string) (*object.Namespace, error) {
+func (controllerMock2) GetNamespaceByName(name string) (*k8sObject.Namespace, error) {
 	if name == "pod-nons" { // handler_pod_verified_test.go uses this for non-existent namespace.
 		return nil, fmt.Errorf("namespace not found")
 	}
 	if name == "nsnoexist" {
 		return nil, fmt.Errorf("namespace not found")
 	}
-	return &object.Namespace{
+	return &k8sObject.Namespace{
 		Name: name,
 	}, nil
 }

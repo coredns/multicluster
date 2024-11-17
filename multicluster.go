@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
+	k8sObject "github.com/coredns/coredns/plugin/kubernetes/object"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/fall"
 	"github.com/coredns/coredns/request"
 	"github.com/coredns/multicluster/object"
-	model "github.com/coredns/multicluster/object"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	apiv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-	"sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
+	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
+	mcsClientset "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
@@ -77,7 +77,7 @@ func (m *MultiCluster) InitController(ctx context.Context) (onStart func() error
 		return nil, nil, fmt.Errorf("failed to create kubernetes notification controller: %q", err)
 	}
 
-	mcsClient, err := v1alpha1.NewForConfig(config)
+	mcsClient, err := mcsClientset.NewForConfig(config)
 
 	m.controller = newController(ctx, kubeClient, mcsClient, m.opts)
 
@@ -176,7 +176,6 @@ func (m MultiCluster) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns
 	message.Extra = append(message.Extra, extra...)
 	w.WriteMsg(message)
 	return dns.RcodeSuccess, nil
-
 }
 
 // Name implements the Handler interface.
@@ -188,7 +187,6 @@ func (m MultiCluster) Name() string { return pluginName }
 // on exact match should be returned.
 func (m MultiCluster) Services(ctx context.Context, state request.Request, exact bool, opt plugin.Options) ([]msg.Service, error) {
 	switch state.QType() {
-
 	case dns.TypeTXT:
 		// 1 label + zone, label must be "dns-version".
 		t, _ := dnsutil.TrimZone(state.Name(), state.Zone)
@@ -323,7 +321,7 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 	var (
 		endpointsListFunc func() []*object.Endpoints
 		endpointsList     []*object.Endpoints
-		serviceList       []*model.ServiceImport
+		serviceList       []*object.ServiceImport
 	)
 
 	if wildcard(r.service) || wildcard(r.namespace) {
@@ -348,7 +346,7 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 		}
 
 		// Headless service or endpoint query
-		if svc.Type == apiv1alpha1.Headless || r.endpoint != "" {
+		if svc.Type == mcs.Headless || r.endpoint != "" {
 			if endpointsList == nil {
 				endpointsList = endpointsListFunc()
 			}
@@ -360,7 +358,6 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 
 				for _, eps := range ep.Subsets {
 					for _, addr := range eps.Addresses {
-
 						if r.endpoint != "" {
 							if !match(r.cluster, ep.ClusterId) || !match(r.endpoint, endpointHostname(addr)) {
 								continue
@@ -402,7 +399,7 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 	return services, err
 }
 
-func endpointHostname(addr object.EndpointAddress) string {
+func endpointHostname(addr k8sObject.EndpointAddress) string {
 	if addr.Hostname != "" {
 		return addr.Hostname
 	}

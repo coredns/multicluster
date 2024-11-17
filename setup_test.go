@@ -1,10 +1,11 @@
 package multicluster
 
 import (
-	"github.com/coredns/caddy"
-	"github.com/coredns/coredns/plugin/pkg/fall"
 	"strings"
 	"testing"
+
+	"github.com/coredns/caddy"
+	"github.com/coredns/coredns/plugin/pkg/fall"
 )
 
 func TestParseStanza(t *testing.T) {
