@@ -368,7 +368,7 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 						}
 
 						for _, p := range eps.Ports {
-							if !(match(r.port, p.Name) && match(r.protocol, string(p.Protocol))) {
+							if !(match(r.port, p.Name) && match(r.protocol, p.Protocol)) {
 								continue
 							}
 							s := msg.Service{Host: addr.IP, Port: int(p.Port), TTL: m.ttl}
@@ -407,10 +407,10 @@ func endpointHostname(addr object.EndpointAddress) string {
 		return addr.Hostname
 	}
 	if strings.Contains(addr.IP, ".") {
-		return strings.Replace(addr.IP, ".", "-", -1)
+		return strings.ReplaceAll(addr.IP, ".", "-")
 	}
 	if strings.Contains(addr.IP, ":") {
-		return strings.Replace(addr.IP, ":", "-", -1)
+		return strings.ReplaceAll(addr.IP, ":", "-")
 	}
 	return ""
 }
