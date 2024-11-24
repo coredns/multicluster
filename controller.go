@@ -307,6 +307,9 @@ func endpointsEquivalent(a, b *object.Endpoints) bool {
 	if len(a.Subsets) != len(b.Subsets) {
 		return false
 	}
+	if a.ClusterId != b.ClusterId {
+		return false
+	}
 
 	// we should be able to rely on
 	// these being sorted and able to be compared
