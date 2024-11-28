@@ -16,7 +16,7 @@ func TestParseRequest(t *testing.T) {
 		// valid SRV request
 		{"_http._tcp.webs.mynamespace.svc.inter.webs.tests.", "http.tcp...webs.mynamespace.svc"},
 		// A request of endpoint
-		{"1-2-3-4.cluster.webs.mynamespace.svc.inter.webs.tests.", "*.*.1-2-3-4.cluster.webs.mynamespace.svc"},
+		{"1-2-3-4.cluster.webs.mynamespace.svc.inter.webs.tests.", "..1-2-3-4.cluster.webs.mynamespace.svc"},
 		// bare zone
 		{"inter.webs.tests.", "......"},
 		// bare svc type

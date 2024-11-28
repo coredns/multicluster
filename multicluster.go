@@ -253,7 +253,7 @@ func (m MultiCluster) Records(ctx context.Context, state request.Request, exact 
 		return nil, errNoItems
 	}
 
-	if !wildcard(r.namespace) && !m.namespaceExists(r.namespace) {
+	if !m.namespaceExists(r.namespace) {
 		return nil, errNsNotExposed
 	}
 
@@ -303,11 +303,6 @@ func (m *MultiCluster) getClientConfig() (*rest.Config, error) {
 	return cc, err
 }
 
-// wildcard checks whether s contains a wildcard value defined as "*" or "any".
-func wildcard(s string) bool {
-	return s == "*" || s == "any"
-}
-
 func (m *MultiCluster) namespaceExists(namespace string) bool {
 	_, err := m.controller.GetNamespaceByName(namespace)
 	if err != nil {
@@ -317,13 +312,13 @@ func (m *MultiCluster) namespaceExists(namespace string) bool {
 }
 
 func (m *MultiCluster) findServices(r recordRequest, zone string) (services []msg.Service, err error) {
-	if !wildcard(r.namespace) && !m.namespaceExists(r.namespace) {
+	if !m.namespaceExists(r.namespace) {
 		return nil, errNoItems
 	}
 
 	// handle empty service name
 	if r.service == "" {
-		if m.namespaceExists(r.namespace) || wildcard(r.namespace) {
+		if m.namespaceExists(r.namespace) {
 			// NODATA
 			return nil, nil
 		}
@@ -332,12 +327,6 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 	}
 
 	err = errNoItems
-	if wildcard(r.service) && !wildcard(r.namespace) {
-		// If namespace exists, err should be nil, so that we return NODATA instead of NXDOMAIN
-		if m.namespaceExists(r.namespace) {
-			err = nil
-		}
-	}
 
 	var (
 		endpointsListFunc func() []*object.Endpoints
@@ -345,24 +334,13 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 		serviceList       []*object.ServiceImport
 	)
 
-	if wildcard(r.service) || wildcard(r.namespace) {
-		serviceList = m.controller.ServiceList()
-		endpointsListFunc = func() []*object.Endpoints { return m.controller.EndpointsList() }
-	} else {
-		idx := object.ServiceKey(r.service, r.namespace)
-		serviceList = m.controller.SvcIndex(idx)
-		endpointsListFunc = func() []*object.Endpoints { return m.controller.EpIndex(idx) }
-	}
+	idx := object.ServiceKey(r.service, r.namespace)
+	serviceList = m.controller.SvcIndex(idx)
+	endpointsListFunc = func() []*object.Endpoints { return m.controller.EpIndex(idx) }
 
 	zonePath := msg.Path(zone, coredns)
 	for _, svc := range serviceList {
 		if !(match(r.namespace, svc.Namespace) && match(r.service, svc.Name)) {
-			continue
-		}
-
-		// If request namespace is a wildcard, filter results against Corefile namespace list.
-		// (Namespaces without a wildcard were filtered before the call to this function.)
-		if wildcard(r.namespace) && !m.namespaceExists(svc.Namespace) {
 			continue
 		}
 
@@ -386,7 +364,7 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 						}
 
 						for _, p := range eps.Ports {
-							if !(match(r.port, p.Name) && match(r.protocol, p.Protocol)) {
+							if !matchPortAndProtocol(r.port, p.Name, r.protocol, p.Protocol) {
 								continue
 							}
 							s := msg.Service{Host: addr.IP, Port: int(p.Port), TTL: m.ttl}
@@ -404,7 +382,7 @@ func (m *MultiCluster) findServices(r recordRequest, zone string) (services []ms
 
 		// ClusterSetIP service
 		for _, p := range svc.Ports {
-			if !(match(r.port, p.Name) && match(r.protocol, string(p.Protocol))) {
+			if !matchPortAndProtocol(r.port, p.Name, r.protocol, string(p.Protocol)) {
 				continue
 			}
 
@@ -433,15 +411,14 @@ func endpointHostname(addr k8sObject.EndpointAddress) string {
 	return ""
 }
 
-// match checks if a and b are equal taking wildcards into account.
+// match checks if a and b are equal.
 func match(a, b string) bool {
-	if wildcard(a) {
-		return true
-	}
-	if wildcard(b) {
-		return true
-	}
 	return strings.EqualFold(a, b)
+}
+
+// matchPortAndProtocol matches port and protocol, permitting the 'a' inputs to be wild
+func matchPortAndProtocol(aPort, bPort, aProtocol, bProtocol string) bool {
+	return (match(aPort, bPort) || aPort == "") && (match(aProtocol, bProtocol) || aProtocol == "")
 }
 
 const coredns = "c" // used as a fake key prefix in msg.Service

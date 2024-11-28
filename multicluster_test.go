@@ -12,27 +12,6 @@ import (
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 )
 
-func TestWildcard(t *testing.T) {
-	tests := []struct {
-		s        string
-		expected bool
-	}{
-		{"mynamespace", false},
-		{"*", true},
-		{"any", true},
-		{"my*space", false},
-		{"*space", false},
-		{"myname*", false},
-	}
-
-	for _, te := range tests {
-		got := wildcard(te.s)
-		if got != te.expected {
-			t.Errorf("Expected Wildcard result '%v' for example '%v', got '%v'.", te.expected, te.s, got)
-		}
-	}
-}
-
 func TestEndpointHostname(t *testing.T) {
 	tests := []struct {
 		ip       string
