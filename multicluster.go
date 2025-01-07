@@ -199,15 +199,23 @@ func (m MultiCluster) Services(ctx context.Context, state request.Request, exact
 		// 1 label + zone, label must be "dns-version".
 		t, _ := dnsutil.TrimZone(state.Name(), state.Zone)
 
+		// Hard code the only valid TXT - "dns-version.<zone>"
 		segs := dns.SplitDomainName(t)
-		if len(segs) != 1 {
+		if len(segs) == 1 && segs[0] == "dns-version" {
+			svc := msg.Service{Text: DNSSchemaVersion, TTL: 28800, Key: msg.Path(state.QName(), coredns)}
+			return []msg.Service{svc}, nil
+		}
+
+		// Check if we have an existing record for this query of another type
+		services, _ := m.Records(ctx, state, false)
+
+		if len(services) > 0 {
+			// If so we return an empty NOERROR
 			return nil, nil
 		}
-		if segs[0] != "dns-version" {
-			return nil, nil
-		}
-		svc := msg.Service{Text: DNSSchemaVersion, TTL: 28800, Key: msg.Path(state.QName(), coredns)}
-		return []msg.Service{svc}, nil
+
+		// Return NXDOMAIN for no match
+		return nil, errNoItems
 
 		// TODO support TypeNS
 	}
