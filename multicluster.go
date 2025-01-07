@@ -88,18 +88,24 @@ func (m *MultiCluster) InitController(ctx context.Context) (onStart func() error
 			m.controller.Run()
 		}()
 
-		timeout := time.After(5 * time.Second)
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
+		timeout := 5 * time.Second
+		timeoutTicker := time.NewTicker(timeout)
+		defer timeoutTicker.Stop()
+		logDelay := 500 * time.Millisecond
+		logTicker := time.NewTicker(logDelay)
+		defer logTicker.Stop()
+		checkSyncTicker := time.NewTicker(100 * time.Millisecond)
+		defer checkSyncTicker.Stop()
 		for {
 			select {
-			case <-ticker.C:
+			case <-checkSyncTicker.C:
 				if m.controller.HasSynced() {
 					return nil
 				}
-			case <-timeout:
-				log.Warning("starting server with unsynced Kubernetes API")
-				return nil
+			case <-logTicker.C:
+				log.Info("waiting for Kubernetes API before starting server multicluster")
+			case <-timeoutTicker.C:
+				log.Warning("starting server multicluster with unsynced Kubernetes API")
 			}
 		}
 	}
