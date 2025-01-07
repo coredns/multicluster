@@ -41,9 +41,6 @@ func parseRequest(name, zone string) (r recordRequest, err error) {
 	}
 	segs := dns.SplitDomainName(base)
 
-	r.port = "*"
-	r.protocol = "*"
-
 	// start at the right and fill out recordRequest with the bits we find, so we look for
 	// pod|svc.namespace.service and then either
 	// * endpoint.cluster
@@ -81,7 +78,6 @@ func parseRequest(name, zone string) (r recordRequest, err error) {
 		return r, errInvalidRequest
 	}
 
-	// TODO it doesn't support port and protocol wildcards
 	// TODO unable to distinguish between endpoint+cluster vs protocol+port queries
 	if strings.HasPrefix(segs[last], "_") { // if label starts with underscore, it must be port and protocol
 		r.port = stripUnderscore(segs[last-1])
