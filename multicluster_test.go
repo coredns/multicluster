@@ -2,16 +2,18 @@ package multicluster
 
 import (
 	"context"
+	"testing"
+
 	"github.com/coredns/coredns/plugin"
+	k8sObject "github.com/coredns/coredns/plugin/kubernetes/object"
 	"github.com/coredns/coredns/request"
 	"github.com/coredns/multicluster/object"
 	"github.com/miekg/dns"
-	"sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-	"testing"
+	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 )
 
 func TestWildcard(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		s        string
 		expected bool
 	}{
@@ -32,7 +34,7 @@ func TestWildcard(t *testing.T) {
 }
 
 func TestEndpointHostname(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		ip       string
 		hostname string
 		expected string
@@ -41,7 +43,7 @@ func TestEndpointHostname(t *testing.T) {
 		{"10.11.12.13", "epname", "epname"},
 	}
 	for _, test := range tests {
-		result := endpointHostname(object.EndpointAddress{IP: test.ip, Hostname: test.hostname})
+		result := endpointHostname(k8sObject.EndpointAddress{IP: test.ip, Hostname: test.hostname})
 		if result != test.expected {
 			t.Errorf("Expected endpoint name for (ip:%v hostname:%v) to be '%v', but got '%v'", test.ip, test.hostname, test.expected, result)
 		}
@@ -61,7 +63,7 @@ func (controllerMock) SvcIndex(string) []*object.ServiceImport {
 			Name:       "svc1",
 			Namespace:  "testns",
 			ClusterIPs: []string{"10.0.0.1"},
-			Ports: []v1alpha1.ServicePort{
+			Ports: []mcs.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
 		},
@@ -69,14 +71,14 @@ func (controllerMock) SvcIndex(string) []*object.ServiceImport {
 			Name:       "svc-dual-stack",
 			Namespace:  "testns",
 			ClusterIPs: []string{"10.0.0.2", "10::2"},
-			Ports: []v1alpha1.ServicePort{
+			Ports: []mcs.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
 		},
 		{
 			Name:      "hdls1",
 			Namespace: "testns",
-			Type:      v1alpha1.Headless,
+			Type:      mcs.Headless,
 		},
 	}
 	return svcs
@@ -88,7 +90,7 @@ func (controllerMock) ServiceList() []*object.ServiceImport {
 			Name:       "svc1",
 			Namespace:  "testns",
 			ClusterIPs: []string{"10.0.0.1"},
-			Ports: []v1alpha1.ServicePort{
+			Ports: []mcs.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
 		},
@@ -96,14 +98,14 @@ func (controllerMock) ServiceList() []*object.ServiceImport {
 			Name:       "svc-dual-stack",
 			Namespace:  "testns",
 			ClusterIPs: []string{"10.0.0.2", "10::2"},
-			Ports: []v1alpha1.ServicePort{
+			Ports: []mcs.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
 		},
 		{
 			Name:      "hdls1",
 			Namespace: "testns",
-			Type:      v1alpha1.Headless,
+			Type:      mcs.Headless,
 		},
 	}
 	return svcs
@@ -112,42 +114,48 @@ func (controllerMock) ServiceList() []*object.ServiceImport {
 func (controllerMock) EpIndex(string) []*object.Endpoints {
 	eps := []*object.Endpoints{
 		{
-			Subsets: []object.EndpointSubset{
-				{
-					Addresses: []object.EndpointAddress{
-						{IP: "172.0.0.1", Hostname: "ep1a"},
-					},
-					Ports: []object.EndpointPort{
-						{Port: 80, Protocol: "tcp", Name: "http"},
-					},
-				},
-			},
-			Name:      "svc1-slice1",
-			Namespace: "testns",
-			ClusterId: "clusterid",
-			Index:     object.EndpointsKey("svc1", "testns"),
-		},
-		{
-			Subsets: []object.EndpointSubset{
-				{
-					Addresses: []object.EndpointAddress{
-						{IP: "172.0.0.2"},
-					},
-					Ports: []object.EndpointPort{
-						{Port: 80, Protocol: "tcp", Name: "http"},
+			Endpoints: k8sObject.Endpoints{
+				Subsets: []k8sObject.EndpointSubset{
+					{
+						Addresses: []k8sObject.EndpointAddress{
+							{IP: "172.0.0.1", Hostname: "ep1a"},
+						},
+						Ports: []k8sObject.EndpointPort{
+							{Port: 80, Protocol: "tcp", Name: "http"},
+						},
 					},
 				},
+				Name:      "svc1-slice1",
+				Namespace: "testns",
+				Index:     object.EndpointsKey("svc1", "testns"),
 			},
-			Name:      "hdls1-slice1",
-			Namespace: "testns",
 			ClusterId: "clusterid",
-			Index:     object.EndpointsKey("hdls1", "testns"),
 		},
 		{
-			Subsets: []object.EndpointSubset{
-				{
-					Addresses: []object.EndpointAddress{
-						{IP: "10.9.8.7", NodeName: "test.node.foo.bar"},
+			Endpoints: k8sObject.Endpoints{
+				Subsets: []k8sObject.EndpointSubset{
+					{
+						Addresses: []k8sObject.EndpointAddress{
+							{IP: "172.0.0.2"},
+						},
+						Ports: []k8sObject.EndpointPort{
+							{Port: 80, Protocol: "tcp", Name: "http"},
+						},
+					},
+				},
+				Name:      "hdls1-slice1",
+				Namespace: "testns",
+				Index:     object.EndpointsKey("hdls1", "testns"),
+			},
+			ClusterId: "clusterid",
+		},
+		{
+			Endpoints: k8sObject.Endpoints{
+				Subsets: []k8sObject.EndpointSubset{
+					{
+						Addresses: []k8sObject.EndpointAddress{
+							{IP: "10.9.8.7", NodeName: "test.node.foo.bar"},
+						},
 					},
 				},
 			},
@@ -159,55 +167,63 @@ func (controllerMock) EpIndex(string) []*object.Endpoints {
 func (controllerMock) EndpointsList() []*object.Endpoints {
 	eps := []*object.Endpoints{
 		{
-			Subsets: []object.EndpointSubset{
-				{
-					Addresses: []object.EndpointAddress{
-						{IP: "172.0.0.1", Hostname: "ep1a"},
-					},
-					Ports: []object.EndpointPort{
-						{Port: 80, Protocol: "tcp", Name: "http"},
-					},
-				},
-			},
-			Name:      "svc1-slice1",
-			Namespace: "testns",
-			Index:     object.EndpointsKey("svc1", "testns"),
-		},
-		{
-			Subsets: []object.EndpointSubset{
-				{
-					Addresses: []object.EndpointAddress{
-						{IP: "172.0.0.2"},
-					},
-					Ports: []object.EndpointPort{
-						{Port: 80, Protocol: "tcp", Name: "http"},
+			Endpoints: k8sObject.Endpoints{
+				Subsets: []k8sObject.EndpointSubset{
+					{
+						Addresses: []k8sObject.EndpointAddress{
+							{IP: "172.0.0.1", Hostname: "ep1a"},
+						},
+						Ports: []k8sObject.EndpointPort{
+							{Port: 80, Protocol: "tcp", Name: "http"},
+						},
 					},
 				},
+				Name:      "svc1-slice1",
+				Namespace: "testns",
+				Index:     object.EndpointsKey("svc1", "testns"),
 			},
-			Name:      "hdls1-slice1",
-			Namespace: "testns",
-			Index:     object.EndpointsKey("hdls1", "testns"),
 		},
 		{
-			Subsets: []object.EndpointSubset{
-				{
-					Addresses: []object.EndpointAddress{
-						{IP: "172.0.0.2"},
-					},
-					Ports: []object.EndpointPort{
-						{Port: 80, Protocol: "tcp", Name: "http"},
+			Endpoints: k8sObject.Endpoints{
+				Subsets: []k8sObject.EndpointSubset{
+					{
+						Addresses: []k8sObject.EndpointAddress{
+							{IP: "172.0.0.2"},
+						},
+						Ports: []k8sObject.EndpointPort{
+							{Port: 80, Protocol: "tcp", Name: "http"},
+						},
 					},
 				},
+				Name:      "hdls1-slice1",
+				Namespace: "testns",
+				Index:     object.EndpointsKey("hdls1", "testns"),
 			},
-			Name:      "hdls1-slice2",
-			Namespace: "testns",
-			Index:     object.EndpointsKey("hdls1", "testns"),
 		},
 		{
-			Subsets: []object.EndpointSubset{
-				{
-					Addresses: []object.EndpointAddress{
-						{IP: "10.9.8.7", NodeName: "test.node.foo.bar"},
+			Endpoints: k8sObject.Endpoints{
+				Subsets: []k8sObject.EndpointSubset{
+					{
+						Addresses: []k8sObject.EndpointAddress{
+							{IP: "172.0.0.2"},
+						},
+						Ports: []k8sObject.EndpointPort{
+							{Port: 80, Protocol: "tcp", Name: "http"},
+						},
+					},
+				},
+				Name:      "hdls1-slice2",
+				Namespace: "testns",
+				Index:     object.EndpointsKey("hdls1", "testns"),
+			},
+		},
+		{
+			Endpoints: k8sObject.Endpoints{
+				Subsets: []k8sObject.EndpointSubset{
+					{
+						Addresses: []k8sObject.EndpointAddress{
+							{IP: "10.9.8.7", NodeName: "test.node.foo.bar"},
+						},
 					},
 				},
 			},
@@ -216,8 +232,8 @@ func (controllerMock) EndpointsList() []*object.Endpoints {
 	return eps
 }
 
-func (controllerMock) GetNamespaceByName(name string) (*object.Namespace, error) {
-	return &object.Namespace{
+func (controllerMock) GetNamespaceByName(name string) (*k8sObject.Namespace, error) {
+	return &k8sObject.Namespace{
 		Name: name,
 	}, nil
 }

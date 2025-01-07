@@ -4,21 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	k8s "github.com/coredns/coredns/plugin/kubernetes/object"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	k8sObject "github.com/coredns/coredns/plugin/kubernetes/object"
 	"github.com/coredns/multicluster/object"
 	api "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
-	discoveryV1beta1 "k8s.io/api/discovery/v1beta1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
-	mcs "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
-	"sync"
-	"sync/atomic"
-	"time"
+	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
+	mcsClientset "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 )
 
 const (
@@ -32,7 +32,7 @@ type controller interface {
 	SvcIndex(string) []*object.ServiceImport
 	EpIndex(string) []*object.Endpoints
 
-	GetNamespaceByName(string) (*object.Namespace, error)
+	GetNamespaceByName(string) (*k8sObject.Namespace, error)
 
 	Run()
 	HasSynced() bool
@@ -49,7 +49,7 @@ type control struct {
 	modified int64
 
 	k8sClient kubernetes.Interface
-	mcsClient mcs.MulticlusterV1alpha1Interface
+	mcsClient mcsClientset.MulticlusterV1alpha1Interface
 
 	svcImportController cache.Controller
 	svcImportLister     cache.Indexer
@@ -72,7 +72,7 @@ type controllerOpts struct {
 	initEndpointsCache bool
 }
 
-func newController(ctx context.Context, k8sClient kubernetes.Interface, mcsClient mcs.MulticlusterV1alpha1Interface, opts controllerOpts) *control {
+func newController(ctx context.Context, k8sClient kubernetes.Interface, mcsClient mcsClientset.MulticlusterV1alpha1Interface, opts controllerOpts) *control {
 	ctl := control{
 		k8sClient: k8sClient,
 		mcsClient: mcsClient,
@@ -93,20 +93,20 @@ func newController(ctx context.Context, k8sClient kubernetes.Interface, mcsClien
 }
 
 func (c *control) watchServiceImport(ctx context.Context) {
-	c.svcImportLister, c.svcImportController = k8s.NewIndexerInformer(
+	c.svcImportLister, c.svcImportController = k8sObject.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc:  serviceImportListFunc(ctx, c.mcsClient, api.NamespaceAll),
 			WatchFunc: serviceImportWatchFunc(ctx, c.mcsClient, api.NamespaceAll),
 		},
-		&v1alpha1.ServiceImport{},
+		&mcs.ServiceImport{},
 		cache.ResourceEventHandlerFuncs{AddFunc: c.Add, UpdateFunc: c.Update, DeleteFunc: c.Delete},
 		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc},
-		k8s.DefaultProcessor(object.ToServiceImport, nil),
+		k8sObject.DefaultProcessor(object.ToServiceImport, nil),
 	)
 }
 
 func (c *control) watchNamespace(ctx context.Context) {
-	c.nsLister, c.nsController = k8s.NewIndexerInformer(
+	c.nsLister, c.nsController = k8sObject.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc:  namespaceListFunc(ctx, c.k8sClient),
 			WatchFunc: namespaceWatchFunc(ctx, c.k8sClient),
@@ -114,12 +114,12 @@ func (c *control) watchNamespace(ctx context.Context) {
 		&api.Namespace{},
 		cache.ResourceEventHandlerFuncs{},
 		cache.Indexers{},
-		k8s.DefaultProcessor(object.ToNamespace, nil),
+		k8sObject.DefaultProcessor(k8sObject.ToNamespace, nil),
 	)
 }
 
 func (c *control) watchEndpointSlice(ctx context.Context) {
-	c.epLister, c.epController = k8s.NewIndexerInformer(
+	c.epLister, c.epController = k8sObject.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc:  endpointSliceListFunc(ctx, c.k8sClient, api.NamespaceAll),
 			WatchFunc: endpointSliceWatchFunc(ctx, c.k8sClient, api.NamespaceAll),
@@ -127,22 +127,7 @@ func (c *control) watchEndpointSlice(ctx context.Context) {
 		&discovery.EndpointSlice{},
 		cache.ResourceEventHandlerFuncs{AddFunc: c.Add, UpdateFunc: c.Update, DeleteFunc: c.Delete},
 		cache.Indexers{epNameNamespaceIndex: epNameNamespaceIndexFunc},
-		k8s.DefaultProcessor(object.EndpointSliceToEndpoints, nil),
-	)
-}
-
-// watchEndpointSliceV1beta1 will set the endpoint Lister and Controller to watch v1beta1
-// instead of the default v1.
-func (c *control) WatchEndpointSliceV1beta1(ctx context.Context) {
-	c.epLister, c.epController = k8s.NewIndexerInformer(
-		&cache.ListWatch{
-			ListFunc:  endpointSliceListFuncV1beta1(ctx, c.k8sClient, api.NamespaceAll),
-			WatchFunc: endpointSliceWatchFuncV1beta1(ctx, c.k8sClient, api.NamespaceAll),
-		},
-		&discoveryV1beta1.EndpointSlice{},
-		cache.ResourceEventHandlerFuncs{AddFunc: c.Add, UpdateFunc: c.Update, DeleteFunc: c.Delete},
-		cache.Indexers{epNameNamespaceIndex: epNameNamespaceIndexFunc},
-		k8s.DefaultProcessor(object.EndpointSliceV1beta1ToEndpoints, nil),
+		k8sObject.DefaultProcessor(object.EndpointSliceToEndpoints, nil),
 	)
 }
 
@@ -232,13 +217,13 @@ func (c *control) EpIndex(idx string) (ep []*object.Endpoints) {
 	return ep
 }
 
-func serviceImportListFunc(ctx context.Context, c mcs.MulticlusterV1alpha1Interface, ns string) func(meta.ListOptions) (runtime.Object, error) {
+func serviceImportListFunc(ctx context.Context, c mcsClientset.MulticlusterV1alpha1Interface, ns string) func(meta.ListOptions) (runtime.Object, error) {
 	return func(opts meta.ListOptions) (runtime.Object, error) {
 		return c.ServiceImports(ns).List(ctx, opts)
 	}
 }
 
-func serviceImportWatchFunc(ctx context.Context, c mcs.MulticlusterV1alpha1Interface, ns string) func(options meta.ListOptions) (watch.Interface, error) {
+func serviceImportWatchFunc(ctx context.Context, c mcsClientset.MulticlusterV1alpha1Interface, ns string) func(options meta.ListOptions) (watch.Interface, error) {
 	return func(opts meta.ListOptions) (watch.Interface, error) {
 		return c.ServiceImports(ns).Watch(ctx, opts)
 	}
@@ -258,34 +243,20 @@ func namespaceWatchFunc(ctx context.Context, c kubernetes.Interface) func(option
 
 func endpointSliceListFunc(ctx context.Context, c kubernetes.Interface, ns string) func(meta.ListOptions) (runtime.Object, error) {
 	return func(opts meta.ListOptions) (runtime.Object, error) {
-		opts.LabelSelector = v1alpha1.LabelServiceName // only slices created by MCS controller
+		opts.LabelSelector = mcs.LabelServiceName // only slices created by MCS controller
 		return c.DiscoveryV1().EndpointSlices(ns).List(ctx, opts)
 	}
 }
 
 func endpointSliceWatchFunc(ctx context.Context, c kubernetes.Interface, ns string) func(options meta.ListOptions) (watch.Interface, error) {
 	return func(opts meta.ListOptions) (watch.Interface, error) {
-		opts.LabelSelector = v1alpha1.LabelServiceName // only slices created by MCS controller
+		opts.LabelSelector = mcs.LabelServiceName // only slices created by MCS controller
 		return c.DiscoveryV1().EndpointSlices(ns).Watch(ctx, opts)
 	}
 }
 
-func endpointSliceListFuncV1beta1(ctx context.Context, c kubernetes.Interface, ns string) func(meta.ListOptions) (runtime.Object, error) {
-	return func(opts meta.ListOptions) (runtime.Object, error) {
-		opts.LabelSelector = v1alpha1.LabelServiceName // only slices created by MCS controller
-		return c.DiscoveryV1beta1().EndpointSlices(ns).List(ctx, opts)
-	}
-}
-
-func endpointSliceWatchFuncV1beta1(ctx context.Context, c kubernetes.Interface, ns string) func(options meta.ListOptions) (watch.Interface, error) {
-	return func(opts meta.ListOptions) (watch.Interface, error) {
-		opts.LabelSelector = v1alpha1.LabelServiceName // only slices created by MCS controller
-		return c.DiscoveryV1beta1().EndpointSlices(ns).Watch(ctx, opts)
-	}
-}
-
 // GetNamespaceByName returns the namespace by name. If nothing is found an error is returned.
-func (c *control) GetNamespaceByName(name string) (*object.Namespace, error) {
+func (c *control) GetNamespaceByName(name string) (*k8sObject.Namespace, error) {
 	o, exists, err := c.nsLister.GetByKey(name)
 	if err != nil {
 		return nil, err
@@ -293,7 +264,7 @@ func (c *control) GetNamespaceByName(name string) (*object.Namespace, error) {
 	if !exists {
 		return nil, fmt.Errorf("namespace not found")
 	}
-	ns, ok := o.(*object.Namespace)
+	ns, ok := o.(*k8sObject.Namespace)
 	if !ok {
 		return nil, fmt.Errorf("found key but not namespace")
 	}
@@ -336,6 +307,9 @@ func endpointsEquivalent(a, b *object.Endpoints) bool {
 	if len(a.Subsets) != len(b.Subsets) {
 		return false
 	}
+	if a.ClusterId != b.ClusterId {
+		return false
+	}
 
 	// we should be able to rely on
 	// these being sorted and able to be compared
@@ -352,7 +326,7 @@ func endpointsEquivalent(a, b *object.Endpoints) bool {
 // subsetsEquivalent checks if two endpoint subsets are significantly equivalent
 // I.e. that they have the same ready addresses, host names, ports (including protocol
 // and service names for SRV)
-func subsetsEquivalent(sa, sb object.EndpointSubset) bool {
+func subsetsEquivalent(sa, sb k8sObject.EndpointSubset) bool {
 	if len(sa.Addresses) != len(sb.Addresses) {
 		return false
 	}
