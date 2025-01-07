@@ -147,6 +147,14 @@ var dnsTestCases = []test.Case{
 			test.A("dup-name.clusterid.hdls1.testns.svc.cluster.local.	5	IN	A	172.0.0.5"),
 		},
 	},
+	// Querying endpoints from a specific clusters it not allowed without specifying the hostname
+	{
+		Qname: "clusterid.hdls1.testns.svc.cluster.local.", Qtype: dns.TypeA,
+		Rcode: dns.RcodeNameError,
+		Ns: []dns.RR{
+			test.SOA("cluster.local.	5	IN	SOA	ns.dns.cluster.local. hostmaster.cluster.local. 1499347823 7200 1800 86400 5"),
+		},
+	},
 	// SRV Service (Headless)
 	{
 		Qname: "_http._tcp.hdls1.testns.svc.cluster.local.", Qtype: dns.TypeSRV,
