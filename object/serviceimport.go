@@ -50,6 +50,7 @@ func ToServiceImport(obj meta.Object) (meta.Object, error) {
 		copy(s.Ports, svc.Spec.Ports)
 	}
 
+	*svc = mcs.ServiceImport{}
 	return s, nil
 }
 

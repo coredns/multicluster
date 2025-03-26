@@ -1,6 +1,8 @@
 package object
 
 import (
+	"maps"
+
 	"github.com/coredns/coredns/plugin/kubernetes/object"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
@@ -20,11 +22,11 @@ func EndpointsKey(name, namespace string) string { return name + "." + namespace
 
 // EndpointSliceToEndpoints converts a *discovery.EndpointSlice to a *Endpoints.
 func EndpointSliceToEndpoints(obj meta.Object) (meta.Object, error) {
+	labels := maps.Clone(obj.GetLabels())
 	ends, err := object.EndpointSliceToEndpoints(obj)
 	if err != nil {
 		return nil, err
 	}
-	labels := obj.GetLabels()
 	e := &Endpoints{
 		Endpoints: *ends.(*object.Endpoints),
 		ClusterId: labels[mcs.LabelSourceCluster],
